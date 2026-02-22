@@ -10,8 +10,7 @@ import './App.css';
 export default function App() {
   const sim = useSimulation();
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [showResults, setShowResults] = useState(false);
-  const [activeTab, setActiveTab] = useState('build'); // 'build' | 'results'
+  const [activeTab, setActiveTab] = useState('build');
 
   const handleAgentClick = useCallback((agent) => {
     setSelectedAgent(prev => prev?.id === agent?.id ? null : agent);
@@ -23,7 +22,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* Header */}
       <header className="app-header">
         <div className="app-header__left">
           <span className="app-header__logo">⬡</span>
@@ -50,10 +48,8 @@ export default function App() {
       </header>
 
       <div className="app-body">
-        {/* Left sidebar */}
         <Sidebar sim={sim} activeTab={activeTab} />
 
-        {/* Main map / results area */}
         <main className="app-main">
           {activeTab === 'build' ? (
             <>
@@ -70,7 +66,6 @@ export default function App() {
           )}
         </main>
 
-        {/* Right agent inspector panel */}
         {selectedAgent && (
           <AgentPanel
             agent={selectedAgent}
