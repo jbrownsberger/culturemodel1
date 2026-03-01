@@ -212,9 +212,10 @@ export default function Sidebar({ sim, activeTab }) {
         {/* ── PARAMS ───────────────────────────────────────────────── */}
         {section === 'params' && (
           <>
+            <p className="sidebar-hint">Core simulation parameters</p>
             {[
               ['nAgents',         'Agents',             30,  200,  10,   'integer'],
-              ['networkDensity',   'Background density', 0.01,0.10, 0.005,'float'],
+              ['networkDensity',   'Initial connections', 0.01,0.10, 0.005,'float'],
               ['awarenessRadius',  'Awareness radius',   0.1, 0.6,  0.02, 'float'],
               ['reallocFreq',      'Reoptimise every N steps', 1, 10, 1, 'integer'],
               ['seed',             'Random seed',        0,   9999, 1,   'integer'],
@@ -229,6 +230,29 @@ export default function Sidebar({ sim, activeTab }) {
                     }))} />
                   <span className="param-val">
                     {type === 'float' ? sim.params[key].toFixed(3) : sim.params[key]}
+                  </span>
+                </div>
+              </label>
+            ))}
+
+            <p className="sidebar-hint" style={{marginTop: 12}}>
+              🆕 Dynamic connection probabilities (per step)
+            </p>
+            {[
+              ['randomConnectionProb',      'Random meeting', 0.0, 0.2, 0.01],
+              ['institutionConnectionProb', 'Institution link', 0.0, 0.8, 0.05],
+              ['connectionBreakProb',       'Connection decay', 0.0, 0.1, 0.005],
+            ].map(([key, label, min, max, step]) => (
+              <label key={key} className="field-label">
+                {label}
+                <div className="param-row">
+                  <input type="range" min={min} max={max} step={step}
+                    value={sim.params[key]}
+                    onChange={e => sim.setParams(p => ({
+                      ...p, [key]: +e.target.value
+                    }))} />
+                  <span className="param-val">
+                    {(sim.params[key] * 100).toFixed(1)}%
                   </span>
                 </div>
               </label>

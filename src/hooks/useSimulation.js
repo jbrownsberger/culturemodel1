@@ -23,6 +23,9 @@ export function useSimulation() {
     awarenessRadius: 0.3,
     reallocFreq:     4,
     seed:            42,
+    randomConnectionProb:      0.05,
+    institutionConnectionProb: 0.30,
+    connectionBreakProb:       0.02,
   });
 
   const animFrameRef = useRef(null);
@@ -35,6 +38,11 @@ export function useSimulation() {
       valueSettings:   Object.fromEntries(
         Object.entries(valueSettings).map(([k, [mean, std]]) => [k, [mean, std]])
       ),
+      connectionParams: {
+        randomConnectionProb:      params.randomConnectionProb,
+        institutionConnectionProb: params.institutionConnectionProb,
+        connectionBreakProb:       params.connectionBreakProb,
+      },
     });
     modelRef.current = m;
     // Deep-clone for React state (so renders trigger)

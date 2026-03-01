@@ -182,6 +182,7 @@ function optimizeAllocation(agent, institutions) {
 // ── Network ──────────────────────────────────────────────────────────────────
 function buildAdjacency(n, density, rand) {
   // Sparse adjacency as Map<id, Set<id>>
+  // Start with minimal random connections (family/neighbors)
   const adj = new Map();
   for (let i = 0; i < n; i++) adj.set(i, new Set());
 
@@ -196,14 +197,56 @@ function buildAdjacency(n, density, rand) {
   return adj;
 }
 
-function addInstitutionalEdges(adjacency, institutions, agents) {
+function addConnection(adjacency, a, b) {
+  if (a === b) return;
+  adjacency.get(a).add(b);
+  adjacency.get(b).add(a);
+}
+
+function removeConnection(adjacency, a, b) {
+  adjacency.get(a).delete(b);
+  adjacency.get(b).delete(a);
+}
+
+// Dynamic connection formation each step
+function updateConnections(adjacency, institutions, agents, rand, params) {
+  const {
+    randomConnectionProb = 0.05,      // 5% chance of random meeting per step
+    institutionConnectionProb = 0.30,  // 30% chance with institution co-members
+    connectionBreakProb = 0.02,        // 2% chance any connection breaks
+  } = params;
+
+  // 1. Random connections (chance encounters)
+  for (let i = 0; i < agents.length; i++) {
+    if (rand() < randomConnectionProb) {
+      const j = Math.floor(rand() * agents.length);
+      if (i !== j) addConnection(adjacency, i, j);
+    }
+  }
+
+  // 2. Institution-based connections
   for (const inst of Object.values(institutions)) {
     const members = [...inst.members];
-    for (let i = 0; i < members.length; i++) {
-      for (let j = i + 1; j < members.length; j++) {
-        const a = members[i], b = members[j];
-        adjacency.get(a).add(b);
-        adjacency.get(b).add(a);
+    if (members.length < 2) continue;
+    
+    // Each member has a chance to connect with other members
+    for (const memberId of members) {
+      if (rand() < institutionConnectionProb) {
+        const otherIdx = Math.floor(rand() * members.length);
+        const otherId = members[otherIdx];
+        if (memberId !== otherId) {
+          addConnection(adjacency, memberId, otherId);
+        }
+      }
+    }
+  }
+
+  // 3. Connection decay
+  for (let i = 0; i < agents.length; i++) {
+    const neighbors = [...adjacency.get(i)];
+    for (const j of neighbors) {
+      if (j > i && rand() < connectionBreakProb) {
+        removeConnection(adjacency, i, j);
       }
     }
   }
@@ -232,6 +275,11 @@ export function createModel(config) {
     awarenessRadius = 0.3,
     reallocFreq     = 4,
     seed            = 42,
+    connectionParams = {
+      randomConnectionProb: 0.05,
+      institutionConnectionProb: 0.30,
+      connectionBreakProb: 0.02,
+    },
   } = config;
 
   const rand = mulberry32(seed);
@@ -275,7 +323,8 @@ export function createModel(config) {
 
   // Build network
   const adjacency = buildAdjacency(nAgents, networkDensity, rand);
-  addInstitutionalEdges(adjacency, institutions, agents);
+  // NOTE: No longer auto-connecting everyone in institutions!
+  // Connections form dynamically during simulation via updateConnections()
 
   // History
   const history = { step: [], ...Object.fromEntries(
@@ -286,7 +335,7 @@ export function createModel(config) {
   )};
 
   const model = { agents, institutions, adjacency, history, step: 0,
-                  reallocFreq, awarenessRadius, rand };
+                  reallocFreq, awarenessRadius, rand, connectionParams };
 
   recordState(model);
   return model;
@@ -313,7 +362,7 @@ function recordState(model) {
 
 // ── Step ─────────────────────────────────────────────────────────────────────
 export function stepModel(model) {
-  const { agents, institutions, adjacency, reallocFreq, awarenessRadius, rand } = model;
+  const { agents, institutions, adjacency, reallocFreq, rand, connectionParams } = model;
 
   // Shuffle agents
   const order = agents.map((_, i) => i).sort(() => rand() - 0.5);
@@ -356,8 +405,8 @@ export function stepModel(model) {
     }
   }
 
-  // Rebuild institutional network edges
-  addInstitutionalEdges(adjacency, institutions, agents);
+  // Dynamic connection updates - NEW!
+  updateConnections(adjacency, institutions, agents, rand, connectionParams);
 
   model.step++;
   recordState(model);
