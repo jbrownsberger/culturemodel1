@@ -1,5 +1,5 @@
 import React from 'react';
-import { getDominantPractice, getFreeTime, PRACTICE_COLORS, PRACTICE_LABELS, INSTITUTION_ICONS } from '../lib/simulation';
+import { getDominantPractice, getFreeTime, calculateSatisfaction, PRACTICE_COLORS, PRACTICE_LABELS, INSTITUTION_ICONS } from '../lib/simulation';
 import './AgentPanel.css';
 
 export default function AgentPanel({ agent, model, onClose }) {
@@ -8,6 +8,7 @@ export default function AgentPanel({ agent, model, onClose }) {
   const color   = PRACTICE_COLORS[dom] || '#999';
   const nbrs    = [...(adjacency.get(agent.id) || [])];
   const freeTime = getFreeTime(agent);
+  const satisfaction = calculateSatisfaction(agent, institutions);
 
   const alloc = Object.entries(agent.timeAllocation)
     .map(([name, hrs]) => ({ name, hrs, inst: institutions[name] }))
@@ -16,6 +17,18 @@ export default function AgentPanel({ agent, model, onClose }) {
 
   const totalAllocated = alloc.reduce((s, x) => s + x.hrs, 0);
   const totalHrs       = agent.timeBudget;
+
+  // Calculate weekly income and spending
+  let weeklyIncome = 0, weeklySpending = 0;
+  for (const { name, hrs, inst } of alloc) {
+    if (inst) {
+      if (inst.practiceType === 'work') {
+        weeklyIncome += hrs * inst.moneyIncomePerHour;
+      } else {
+        weeklySpending += hrs * inst.moneyCostPerHour;
+      }
+    }
+  }
 
   const topValues = Object.entries(agent.values)
     .sort((a, b) => b[1] - a[1]);
@@ -34,6 +47,61 @@ export default function AgentPanel({ agent, model, onClose }) {
       </div>
 
       <div className="agent-panel__body">
+
+        {/* Overall Satisfaction */}
+        <section className="panel-section">
+          <h3 className="panel-section__title">Overall Satisfaction</h3>
+          <div className="satisfaction-display">
+            <div className="satisfaction-bar">
+              <div 
+                className="satisfaction-fill"
+                style={{ 
+                  width: `${satisfaction * 100}%`,
+                  background: satisfaction > 0.7 ? '#2ecc71' : 
+                             satisfaction > 0.4 ? '#f39c12' : '#e74c3c'
+                }}
+              />
+            </div>
+            <span className="satisfaction-pct">{(satisfaction * 100).toFixed(0)}%</span>
+          </div>
+          <p className="satisfaction-desc">
+            {satisfaction > 0.7 ? 'Thriving — values well-aligned with life' :
+             satisfaction > 0.5 ? 'Content — most needs being met' :
+             satisfaction > 0.3 ? 'Struggling — significant unmet needs' :
+             'Distressed — values not being fulfilled'}
+          </p>
+        </section>
+
+        {/* Financial Summary */}
+        <section className="panel-section">
+          <h3 className="panel-section__title">Financial Status</h3>
+          <div className="finance-grid">
+            <div className="finance-row">
+              <span className="finance-label">Savings</span>
+              <span className="finance-value">${agent.moneyBudget.toFixed(0)}</span>
+            </div>
+            <div className="finance-row">
+              <span className="finance-label">Weekly income</span>
+              <span className="finance-value income">${weeklyIncome.toFixed(0)}</span>
+            </div>
+            <div className="finance-row">
+              <span className="finance-label">Weekly spending</span>
+              <span className="finance-value spending">${weeklySpending.toFixed(0)}</span>
+            </div>
+            <div className="finance-row total">
+              <span className="finance-label">Net weekly</span>
+              <span className="finance-value" style={{
+                color: weeklyIncome - weeklySpending > 0 ? '#2ecc71' : '#e74c3c'
+              }}>
+                ${(weeklyIncome - weeklySpending).toFixed(0)}
+              </span>
+            </div>
+            <div className="finance-row">
+              <span className="finance-label">Material satisfaction</span>
+              <span className="finance-value">{(agent.materialSatisfaction * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+        </section>
 
         {/* Time allocation donut */}
         <section className="panel-section">
@@ -67,7 +135,7 @@ export default function AgentPanel({ agent, model, onClose }) {
           </div>
         </section>
 
-        {/* Values radar */}
+        {/* Values */}
         <section className="panel-section">
           <h3 className="panel-section__title">Values</h3>
           <div className="values-grid">

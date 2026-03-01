@@ -97,7 +97,7 @@ function createAgent(id, rand) {
     },
     timeBudget:  168,
     moneyBudget: 500 + rand() * 1500,  // Starting savings
-    materialSatisfaction: 0.5,  // Current satisfaction level (0-1)
+    materialSatisfaction: rand() * 0.4,  // Start LOW (0-40%) so people need to shop
     timeAllocation: {},     // { instName: hours }
     institutions: new Set(),
     awareOf:      new Set(),
@@ -130,6 +130,47 @@ function getDominantPractice(agent, institutions) {
   }
   if (!Object.keys(totals).length) return 'none';
   return Object.entries(totals).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// Calculate agent's overall satisfaction (0-1) based on how well their values are being met
+function calculateSatisfaction(agent, institutions) {
+  let totalValueWeight = 0;
+  let weightedSatisfaction = 0;
+  
+  for (const [valueName, valueStrength] of Object.entries(agent.values)) {
+    if (valueStrength === 0) continue;
+    totalValueWeight += valueStrength;
+    
+    let valueFulfillment = 0;
+    
+    if (valueName === 'material') {
+      // Material is directly tracked
+      valueFulfillment = agent.materialSatisfaction;
+    } else if (valueName === 'leisure') {
+      // Leisure fulfilled by free time
+      const freeTime = getFreeTime(agent);
+      valueFulfillment = Math.min(1, freeTime / 60); // 60+ hours free = fully satisfied
+    } else {
+      // Other values fulfilled by time spent in institutions that provide them
+      for (const [instName, hours] of Object.entries(agent.timeAllocation)) {
+        const inst = institutions[instName];
+        if (!inst) continue;
+        const profile = PRACTICE_PROFILES[inst.practiceType];
+        if (!profile) continue;
+        
+        const benefit = profile.benefits[valueName] || 0;
+        if (benefit > 0) {
+          const eff = Math.pow(hours, 1 / profile.dr);
+          valueFulfillment += benefit * eff * 0.1; // Scale down to 0-1 range
+        }
+      }
+      valueFulfillment = Math.min(1, valueFulfillment);
+    }
+    
+    weightedSatisfaction += valueFulfillment * valueStrength;
+  }
+  
+  return totalValueWeight > 0 ? weightedSatisfaction / totalValueWeight : 0.5;
 }
 
 // ── Institution ──────────────────────────────────────────────────────────────
@@ -166,26 +207,29 @@ function calcUtility(agent, instName, hours, institutions, currentAllocation = {
   if (inst.practiceType === 'shopping') {
     const moneySpent = hours * inst.moneyCostPerHour;
     const materialGain = calcMaterialGain(moneySpent);
-    const materialDeficit = agent.values.material - agent.materialSatisfaction;
-    u += materialGain * Math.max(0, materialDeficit) * 10; // High value if unsatisfied
+    const materialDeficit = Math.max(0, agent.values.material - agent.materialSatisfaction);
+    
+    // VERY high utility if unsatisfied - material needs are pressing!
+    // Scale by both deficit and absolute material value
+    u += materialGain * materialDeficit * agent.values.material * 100;
   }
   
-  // Money cost (negative utility for non-work)
-  if (inst.practiceType !== 'work') {
-    u -= hours * inst.moneyCostPerHour * 0.001; // Small direct cost
+  // Money cost (negative utility for non-work, but not for shopping which has intrinsic value)
+  if (inst.practiceType !== 'work' && inst.practiceType !== 'shopping') {
+    u -= hours * inst.moneyCostPerHour * 0.01;
   }
   
   // Income value is INSTRUMENTAL - based on ability to satisfy material needs
   if (inst.practiceType === 'work') {
     const potentialIncome = hours * inst.moneyIncomePerHour;
-    const materialDeficit = agent.values.material - agent.materialSatisfaction;
+    const materialDeficit = Math.max(0, agent.values.material - agent.materialSatisfaction);
     
     // Income is valuable only if you have unmet material needs
     if (materialDeficit > 0) {
-      // Calculate how much shopping this income could buy
-      const affordableShoppingHours = potentialIncome / 50; // Assume $50/hr shopping cost
-      const potentialMaterialGain = calcMaterialGain(potentialIncome);
-      u += potentialMaterialGain * materialDeficit * 5; // Value income for what it can buy
+      // Value income for potential shopping it enables
+      const shoppingAffordable = potentialIncome / 50; // Assume $50/hr shopping
+      const potentialMaterialGain = calcMaterialGain(potentialIncome * 0.5); // Assume spend half
+      u += potentialMaterialGain * materialDeficit * agent.values.material * 20;
     }
   }
   
@@ -195,7 +239,7 @@ function calcUtility(agent, instName, hours, institutions, currentAllocation = {
 // Material satisfaction from spending money
 function calcMaterialGain(moneySpent) {
   // Logarithmic - $100 does a lot, but $1000 isn't 10x better
-  return Math.log(1 + moneySpent / 100) * 0.3;
+  return Math.log(1 + moneySpent / 100) * 0.4; // Increased from 0.3
 }
 
 function marginalUtility(agent, instName, currentHours, institutions, currentAllocation) {
@@ -561,4 +605,4 @@ export function stepModel(model) {
 }
 
 // ── Accessors ────────────────────────────────────────────────────────────────
-export { getFreeTime, getDominantPractice, PRACTICE_PROFILES };
+export { getFreeTime, getDominantPractice, calculateSatisfaction, PRACTICE_PROFILES };
