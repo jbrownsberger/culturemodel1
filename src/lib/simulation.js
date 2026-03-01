@@ -27,18 +27,49 @@ export const INSTITUTION_ICONS = {
   education:        '🏫',
   political_org:    '🏛',
   community_center: '🏡',
+  shopping:         '🛒',
 };
 
 const PRACTICE_PROFILES = {
-  work:             { optimalHours: 40, dr: 1.5, benefits: { community:0.01, tradition:0.0, growth:0.02, civic:0.01, status:0.03, leisure:-0.05, wealth:0.0 } },
-  church:           { optimalHours: 10, dr: 1.3, benefits: { community:0.15, tradition:0.12, growth:0.05, civic:0.06, status:0.04, leisure:0.0, wealth:0.0 } },
-  club:             { optimalHours:  6, dr: 1.4, benefits: { community:0.10, tradition:0.02, growth:0.08, civic:0.03, status:0.06, leisure:0.05, wealth:0.0 } },
-  education:        { optimalHours: 20, dr: 1.1, benefits: { community:0.05, tradition:0.04, growth:0.15, civic:0.05, status:0.10, leisure:0.0, wealth:0.0 } },
-  political_org:    { optimalHours: 15, dr: 1.2, benefits: { community:0.07, tradition:0.03, growth:0.06, civic:0.15, status:0.09, leisure:0.0, wealth:0.0 } },
-  community_center: { optimalHours: 30, dr: 1.2, benefits: { community:0.12, tradition:0.08, growth:0.04, civic:0.02, status:0.02, leisure:0.08, wealth:0.0 } },
+  work: {
+    optimalHours: 40, dr: 1.5,
+    benefits: { community:0.01, tradition:0.0, growth:0.02, civic:0.01, status:0.03, leisure:-0.05, material:0.0 }
+  },
+  church: {
+    optimalHours: 10, dr: 1.3,
+    benefits: { community:0.15, tradition:0.12, growth:0.05, civic:0.06, status:0.04, leisure:0.0, material:0.0 }
+  },
+  club: {
+    optimalHours:  6, dr: 1.4,
+    benefits: { community:0.10, tradition:0.02, growth:0.08, civic:0.03, status:0.06, leisure:0.05, material:0.0 }
+  },
+  education: {
+    optimalHours: 20, dr: 1.1,
+    benefits: { community:0.05, tradition:0.04, growth:0.15, civic:0.05, status:0.10, leisure:0.0, material:0.0 }
+  },
+  political_org: {
+    optimalHours: 15, dr: 1.2,
+    benefits: { community:0.07, tradition:0.03, growth:0.06, civic:0.15, status:0.09, leisure:0.0, material:0.0 }
+  },
+  community_center: {
+    optimalHours: 30, dr: 1.2,
+    benefits: { community:0.12, tradition:0.08, growth:0.04, civic:0.02, status:0.02, leisure:0.08, material:0.0 }
+  },
+  shopping: {
+    optimalHours: 3, dr: 1.8,  // Very diminishing - shopping more doesn't help much
+    benefits: { community:0.0, tradition:0.0, growth:0.0, civic:0.0, status:0.02, leisure:0.02, material:0.0 }
+    // material benefit calculated separately based on money spent
+  },
 };
 
-const MAX_HOURS = { work:60, church:20, club:15, political_org:30, education:40, community_center:50 };
+const MAX_HOURS = { work:60, church:20, club:15, political_org:30, education:40, community_center:50, shopping:10 };
+
+// Exclusive groups - agents can only join ONE institution per group
+const EXCLUSIVE_GROUPS = {
+  work:   'employment',
+  church: 'religious',
+  // clubs, education, community_center, shopping are NOT exclusive
+};
 
 // ── Seeded RNG for reproducibility ──────────────────────────────────────────
 function mulberry32(seed) {
@@ -62,10 +93,11 @@ function createAgent(id, rand) {
       civic:     rand(),
       status:    rand(),
       leisure:   rand(),
-      wealth:    rand(),
+      material:  rand(),  // Replaces wealth - desire for material goods
     },
     timeBudget:  168,
-    moneyBudget: 500 + rand() * 1500,
+    moneyBudget: 500 + rand() * 1500,  // Starting savings
+    materialSatisfaction: 0.5,  // Current satisfaction level (0-1)
     timeAllocation: {},     // { instName: hours }
     institutions: new Set(),
     awareOf:      new Set(),
@@ -115,7 +147,7 @@ function createInstitution(config, rand) {
 }
 
 // ── Utility calculations ─────────────────────────────────────────────────────
-function calcUtility(agent, instName, hours, institutions) {
+function calcUtility(agent, instName, hours, institutions, currentAllocation = {}) {
   if (hours <= 0) return 0;
   const inst    = institutions[instName];
   if (!inst) return 0;
@@ -124,50 +156,134 @@ function calcUtility(agent, instName, hours, institutions) {
 
   const eff = Math.pow(hours, 1 / profile.dr);
   let u = 0;
+  
+  // Direct value benefits from activity
   for (const [dim, benefit] of Object.entries(profile.benefits)) {
     u += benefit * (agent.values[dim] || 0) * eff;
   }
-  if (inst.practiceType === 'work') {
-    u += hours * inst.moneyIncomePerHour * (agent.values.wealth || 0) * 0.01;
-  } else {
-    u -= hours * inst.moneyCostPerHour  * (agent.values.wealth || 0) * 0.01;
+  
+  // Special handling for shopping: material satisfaction from money spent
+  if (inst.practiceType === 'shopping') {
+    const moneySpent = hours * inst.moneyCostPerHour;
+    const materialGain = calcMaterialGain(moneySpent);
+    const materialDeficit = agent.values.material - agent.materialSatisfaction;
+    u += materialGain * Math.max(0, materialDeficit) * 10; // High value if unsatisfied
   }
+  
+  // Money cost (negative utility for non-work)
+  if (inst.practiceType !== 'work') {
+    u -= hours * inst.moneyCostPerHour * 0.001; // Small direct cost
+  }
+  
+  // Income value is INSTRUMENTAL - based on ability to satisfy material needs
+  if (inst.practiceType === 'work') {
+    const potentialIncome = hours * inst.moneyIncomePerHour;
+    const materialDeficit = agent.values.material - agent.materialSatisfaction;
+    
+    // Income is valuable only if you have unmet material needs
+    if (materialDeficit > 0) {
+      // Calculate how much shopping this income could buy
+      const affordableShoppingHours = potentialIncome / 50; // Assume $50/hr shopping cost
+      const potentialMaterialGain = calcMaterialGain(potentialIncome);
+      u += potentialMaterialGain * materialDeficit * 5; // Value income for what it can buy
+    }
+  }
+  
   return u;
 }
 
-function marginalUtility(agent, instName, currentHours, institutions) {
-  return calcUtility(agent, instName, currentHours + 1, institutions)
-       - calcUtility(agent, instName, currentHours,     institutions);
+// Material satisfaction from spending money
+function calcMaterialGain(moneySpent) {
+  // Logarithmic - $100 does a lot, but $1000 isn't 10x better
+  return Math.log(1 + moneySpent / 100) * 0.3;
+}
+
+function marginalUtility(agent, instName, currentHours, institutions, currentAllocation) {
+  return calcUtility(agent, instName, currentHours + 1, institutions, currentAllocation)
+       - calcUtility(agent, instName, currentHours,     institutions, currentAllocation);
 }
 
 function optimizeAllocation(agent, institutions) {
-  const allocation = {};
-  for (const name of agent.awareOf) allocation[name] = 0;
+  // PHASE 1: Choose best option from each exclusive group
+  const exclusiveChoices = {};
+  const groupInsts = {};
+  
+  // Group institutions by exclusivity
+  for (const instName of agent.awareOf) {
+    const inst = institutions[instName];
+    if (!inst) continue;
+    const group = EXCLUSIVE_GROUPS[inst.practiceType];
+    if (group) {
+      if (!groupInsts[group]) groupInsts[group] = [];
+      groupInsts[group].push(instName);
+    }
+  }
+  
+  // Pick best from each exclusive group
+  for (const [group, instNames] of Object.entries(groupInsts)) {
+    let bestInst = null;
+    let bestUtility = -Infinity;
+    
+    for (const instName of instNames) {
+      const inst = institutions[instName];
+      if (!inst || inst.members.size >= inst.size) continue;
+      
+      // Estimate utility of committing reasonable hours to this institution
+      const testHours = inst.practiceType === 'work' ? 40 : 
+                       inst.practiceType === 'church' ? 5 : 10;
+      const u = calcUtility(agent, instName, testHours, institutions, {});
+      
+      if (u > bestUtility) {
+        bestUtility = u;
+        bestInst = instName;
+      }
+    }
+    
+    if (bestInst) {
+      exclusiveChoices[bestInst] = 0; // Will allocate hours below
+    }
+  }
+  
+  // PHASE 2: Greedy allocation across chosen exclusives + non-exclusives
+  const allocation = { ...exclusiveChoices };
+  
+  // Add non-exclusive institutions to allocation pool
+  for (const instName of agent.awareOf) {
+    const inst = institutions[instName];
+    if (!inst) continue;
+    const group = EXCLUSIVE_GROUPS[inst.practiceType];
+    if (!group && !(instName in allocation)) {
+      allocation[instName] = 0;
+    }
+  }
+  
   let timeLeft = agent.timeBudget;
-
+  
+  // Greedy hour allocation
   for (let iter = 0; iter < agent.timeBudget; iter++) {
     if (timeLeft <= 0) break;
 
     let bestInst = null, bestMU = 0.005;
 
-    for (const name of agent.awareOf) {
+    for (const name of Object.keys(allocation)) {
       const inst = institutions[name];
       if (!inst) continue;
       const cur    = allocation[name] || 0;
       const maxHrs = MAX_HOURS[inst.practiceType] || 50;
       if (cur >= maxHrs) continue;
 
-      // Affordability
-      if (inst.practiceType !== 'work') {
+      // Affordability check
+      if (inst.practiceType !== 'work' && inst.moneyCostPerHour > 0) {
         const income = Object.entries(allocation)
           .reduce((s, [n, h]) => s + h * (institutions[n]?.moneyIncomePerHour || 0), 0);
         const costs  = Object.entries(allocation)
           .reduce((s, [n, h]) => s + h * (institutions[n]?.moneyCostPerHour  || 0), 0);
         const bal    = agent.moneyBudget + income - costs;
+        
         if (bal - inst.moneyCostPerHour < 0) continue;
       }
 
-      const mu = marginalUtility(agent, name, cur, institutions);
+      const mu = marginalUtility(agent, name, cur, institutions, allocation);
       if (mu > bestMU) { bestMU = mu; bestInst = name; }
     }
 
@@ -407,6 +523,36 @@ export function stepModel(model) {
 
   // Dynamic connection updates - NEW!
   updateConnections(adjacency, institutions, agents, rand, connectionParams);
+
+  // Update material satisfaction and money from shopping/work
+  for (const agent of agents) {
+    // Calculate income and spending this step
+    let income = 0, spending = 0, materialGain = 0;
+    
+    for (const [instName, hours] of Object.entries(agent.timeAllocation)) {
+      const inst = institutions[instName];
+      if (!inst) continue;
+      
+      if (inst.practiceType === 'work') {
+        income += hours * inst.moneyIncomePerHour;
+      } else if (inst.practiceType === 'shopping') {
+        const cost = hours * inst.moneyCostPerHour;
+        spending += cost;
+        materialGain += calcMaterialGain(cost);
+      } else {
+        spending += hours * inst.moneyCostPerHour;
+      }
+    }
+    
+    // Update money (weekly basis)
+    agent.moneyBudget += (income - spending) / 4; // Assume step = 1 week, but smooth over month
+    agent.moneyBudget = Math.max(0, agent.moneyBudget); // Can't go negative
+    
+    // Update material satisfaction (decays over time)
+    agent.materialSatisfaction += materialGain;
+    agent.materialSatisfaction *= 0.95; // 5% decay per step (things wear out, needs recur)
+    agent.materialSatisfaction = Math.min(1, Math.max(0, agent.materialSatisfaction));
+  }
 
   model.step++;
   recordState(model);

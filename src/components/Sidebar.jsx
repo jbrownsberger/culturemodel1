@@ -6,17 +6,17 @@ const PRESETS = {
   'Traditional': {
     community: [0.75, 0.15], tradition: [0.80, 0.12],
     growth:    [0.40, 0.20], civic:     [0.60, 0.18],
-    status:    [0.30, 0.18], leisure:   [0.50, 0.20], wealth: [0.35, 0.18],
+    status:    [0.30, 0.18], leisure:   [0.50, 0.20], material: [0.50, 0.20],
   },
   'Secular Urban': {
     community: [0.40, 0.20], tradition: [0.20, 0.15],
     growth:    [0.70, 0.18], civic:     [0.40, 0.20],
-    status:    [0.70, 0.18], leisure:   [0.60, 0.20], wealth: [0.70, 0.18],
+    status:    [0.70, 0.18], leisure:   [0.60, 0.20], material: [0.70, 0.18],
   },
   'Status-Driven': {
     community: [0.30, 0.18], tradition: [0.35, 0.18],
     growth:    [0.60, 0.18], civic:     [0.25, 0.18],
-    status:    [0.90, 0.08], leisure:   [0.25, 0.18], wealth: [0.80, 0.12],
+    status:    [0.90, 0.08], leisure:   [0.25, 0.18], material: [0.80, 0.12],
   },
 };
 
@@ -25,7 +25,7 @@ const QUICK_INSTS = [
   { label: '⛪ Church',     type: 'church',         size: 30, money_cost:2,  money_income:0,  culture:{community:0.8,tradition:0.9,growth:0.3,civic:0.5,status:0.3} },
   { label: '🎳 Club',       type: 'club',           size: 25, money_cost:5,  money_income:0,  culture:{community:0.6,tradition:0.2,growth:0.5,civic:0.3,status:0.5} },
   { label: '🏫 School',     type: 'education',      size: 35, money_cost:10, money_income:0,  culture:{community:0.4,tradition:0.4,growth:0.9,civic:0.5,status:0.7} },
-  { label: '🏛 Civic org',  type: 'political_org',  size: 20, money_cost:0,  money_income:0,  culture:{community:0.5,tradition:0.3,growth:0.4,civic:0.9,status:0.4} },
+  { label: '🛒 Store',      type: 'shopping',       size: 100, money_cost:50, money_income:0,  culture:{community:0.1,tradition:0.1,growth:0.0,civic:0.0,status:0.2} },
 ];
 
 export default function Sidebar({ sim, activeTab }) {

@@ -8,7 +8,7 @@ const DEFAULT_VALUES = {
   civic:     [0.5, 0.2],
   status:    [0.5, 0.2],
   leisure:   [0.5, 0.2],
-  wealth:    [0.5, 0.2],
+  material:  [0.5, 0.2],
 };
 
 export function useSimulation() {
