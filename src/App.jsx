@@ -4,13 +4,16 @@ import MapView from './components/MapView';
 import AgentPanel from './components/AgentPanel';
 import ControlBar from './components/ControlBar';
 import ResultsDrawer from './components/ResultsDrawer';
+import InterventionsPanel from './components/InterventionsPanel';
 import { useSimulation } from './hooks/useSimulation';
 import './App.css';
 
 export default function App() {
   const sim = useSimulation();
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [activeTab, setActiveTab] = useState('build');
+  const [showResults, setShowResults] = useState(false);
+  const [activeTab, setActiveTab] = useState('build'); // 'build' | 'results'
+  const [showInterventions, setShowInterventions] = useState(false);
 
   const handleAgentClick = useCallback((agent) => {
     setSelectedAgent(prev => prev?.id === agent?.id ? null : agent);
@@ -22,6 +25,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* Header */}
       <header className="app-header">
         <div className="app-header__left">
           <span className="app-header__logo">⬡</span>
@@ -40,16 +44,27 @@ export default function App() {
         </div>
         <div className="app-header__right">
           {sim.model && (
-            <span className="app-header__stat">
-              {sim.model.agents.length} agents · {Object.keys(sim.model.institutions).length} institutions · step {sim.currentStep}
-            </span>
+            <>
+              <button
+                className={`intervention-toggle ${showInterventions ? 'active' : ''}`}
+                onClick={() => setShowInterventions(v => !v)}
+                title="Toggle interventions panel"
+              >
+                ⚡ Intervene
+              </button>
+              <span className="app-header__stat">
+                {sim.model.agents.length} agents · {Object.keys(sim.model.institutions).length} institutions · step {sim.currentStep}
+              </span>
+            </>
           )}
         </div>
       </header>
 
       <div className="app-body">
+        {/* Left sidebar */}
         <Sidebar sim={sim} activeTab={activeTab} />
 
+        {/* Main map / results area */}
         <main className="app-main">
           {activeTab === 'build' ? (
             <>
@@ -64,8 +79,12 @@ export default function App() {
           ) : (
             <ResultsDrawer sim={sim} />
           )}
+
+          {/* Interventions panel overlay */}
+          {showInterventions && <InterventionsPanel sim={sim} />}
         </main>
 
+        {/* Right agent inspector panel */}
         {selectedAgent && (
           <AgentPanel
             agent={selectedAgent}
