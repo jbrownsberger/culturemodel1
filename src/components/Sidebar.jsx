@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { INSTITUTION_ICONS, PRACTICE_COLORS } from '../lib/simulation';
+import { VICTORY_CONDITIONS } from '../lib/gameMode';
 import './Sidebar.css';
 
 const PRESETS = {
@@ -212,6 +213,54 @@ export default function Sidebar({ sim, activeTab }) {
         {/* ── PARAMS ───────────────────────────────────────────────── */}
         {section === 'params' && (
           <>
+            {/* Game Mode Selection */}
+            <div className="game-mode-section">
+              <p className="sidebar-hint">🎮 Game Mode</p>
+              <div className="game-mode-buttons">
+                <button
+                  className={`game-mode-btn ${sim.gameMode.mode === 'sandbox' ? 'active' : ''}`}
+                  onClick={() => sim.setGameMode(g => ({ ...g, mode: 'sandbox', objective: null }))}
+                  disabled={sim.hasRun}
+                >
+                  <div className="game-mode-emoji">⚗️</div>
+                  <div className="game-mode-label">Sandbox</div>
+                  <div className="game-mode-desc">Free exploration</div>
+                </button>
+                <button
+                  className={`game-mode-btn ${sim.gameMode.mode === 'challenge' ? 'active' : ''}`}
+                  onClick={() => sim.setGameMode(g => ({ ...g, mode: 'challenge', objective: 'renaissance' }))}
+                  disabled={sim.hasRun}
+                >
+                  <div className="game-mode-emoji">🎯</div>
+                  <div className="game-mode-label">Challenge</div>
+                  <div className="game-mode-desc">Win conditions & events</div>
+                </button>
+              </div>
+
+              {sim.gameMode.mode === 'challenge' && (
+                <div className="objective-selector">
+                  <label className="field-label">Victory Objective</label>
+                  <select
+                    className="field-select"
+                    value={sim.gameMode.objective || 'renaissance'}
+                    onChange={e => sim.setGameMode(g => ({ ...g, objective: e.target.value }))}
+                    disabled={sim.hasRun}
+                  >
+                    {Object.entries(VICTORY_CONDITIONS).map(([key, obj]) => (
+                      <option key={key} value={key.toLowerCase()}>
+                        {obj.emoji} {obj.name}
+                      </option>
+                    ))}
+                  </select>
+                  {sim.gameMode.objective && (
+                    <p className="objective-desc">
+                      {VICTORY_CONDITIONS[sim.gameMode.objective.toUpperCase()].description}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <p className="sidebar-hint">Core simulation parameters</p>
             {[
               ['nAgents',         'Agents',             30,  200,  10,   'integer'],

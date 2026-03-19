@@ -27,6 +27,11 @@ export function useSimulation() {
     institutionConnectionProb: 0.30,
     connectionBreakProb:       0.02,
   });
+  const [gameMode, setGameMode] = useState({
+    mode: 'sandbox', // 'sandbox' | 'challenge'
+    objective: null, // 'renaissance' | 'prosperity' | 'harmony'
+    budget: 10000, // For challenge mode
+  });
 
   const animFrameRef = useRef(null);
   const modelRef     = useRef(null);
@@ -110,8 +115,10 @@ export function useSimulation() {
     institutions,
     valueSettings,
     params,
+    gameMode,
     setParams,
     setValueSettings,
+    setGameMode,
     initModel,
     runStep,
     runNSteps,

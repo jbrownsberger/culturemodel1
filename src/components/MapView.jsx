@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { getDominantPractice, PRACTICE_COLORS, INSTITUTION_ICONS, getFreeTime } from '../lib/simulation';
+import GameDashboard from './GameDashboard';
 import './MapView.css';
 
 const INST_SHAPES = {
@@ -226,6 +227,9 @@ export default function MapView({ sim, selectedAgent, onAgentClick, onMapClick }
 
       {/* Tooltip */}
       {tooltip && <Tooltip tooltip={tooltip} institutions={institutions} />}
+
+      {/* Game Dashboard Overlay */}
+      <GameDashboard sim={sim} gameMode={sim.gameMode} />
     </div>
   );
 }
